@@ -23,19 +23,6 @@ func (m messages) GetAllByDialogID(dialogID int64) ([]models.Message, error) {
 		return nil, tx.Error
 	}
 
-	//rows, err := tx.Rows()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//defer rows.Close()
-
-	//res := make([]models.Message, tx.RowsAffected)
-	//for rows.Next() {
-	//	if err := rows.Scan(&res); err != nil {
-	//		return nil, err
-	//	}
-	//}
-
 	return res, nil
 }
 

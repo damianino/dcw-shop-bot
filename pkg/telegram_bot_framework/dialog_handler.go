@@ -9,11 +9,11 @@ type DialogHandler struct {
 	dialogTree  *DialogTree
 	currentPage *Page
 	updatesIn   chan tgbotapi.Update
-	msgOut      chan tgbotapi.Chattable
+	msgOut      chan interface{}
 	deleteFlag  chan struct{}
 }
 
-func NewDialogHandler(dialogTree DialogTree, msgIn chan tgbotapi.Update, msgOut chan tgbotapi.Chattable, deleteFlag chan struct{}) *DialogHandler {
+func NewDialogHandler(dialogTree DialogTree, msgIn chan tgbotapi.Update, msgOut chan interface{}, deleteFlag chan struct{}) *DialogHandler {
 	return &DialogHandler{
 		dialogTree:  &dialogTree,
 		currentPage: dialogTree.root,

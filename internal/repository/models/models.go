@@ -2,6 +2,12 @@ package models
 
 import "time"
 
+const (
+	MediaTypeVideo    = "video"
+	MediaTypePhoto    = "photo"
+	MediaTypeDocument = "document"
+)
+
 type Dialog struct {
 	ID               int64  `gorm:"primaryKey"`
 	TGUserID         int64  `gorm:"column:tg_user_id"`
@@ -22,6 +28,19 @@ type Message struct {
 }
 
 type Media struct {
-	MessageID int64 `gorm:"primaryKey"`
-	TGFileID  int64 `gorm:"column:tg_file_id"`
+	MessageID int64  `gorm:"primaryKey"`
+	TGFileID  string `gorm:"column:tg_file_id"`
+	Type      string
+}
+
+func (m *Media) IsPhoto() bool {
+	return m.Type == MediaTypePhoto
+}
+
+func (m *Media) IsVideo() bool {
+	return m.Type == MediaTypeVideo
+}
+
+func (m *Media) IsDocument() bool {
+	return m.Type == MediaTypeDocument
 }

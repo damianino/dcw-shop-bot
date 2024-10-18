@@ -8,7 +8,7 @@ import (
 
 type DialogControls struct {
 	UpdatesIn chan tgbotapi.Update
-	MsgOut    chan tgbotapi.Chattable
+	MsgOut    chan interface{}
 }
 
 func (dc *DialogControls) Prompt(prompt Prompt) string {

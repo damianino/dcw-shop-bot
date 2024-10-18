@@ -41,7 +41,7 @@ func (b *Bot) consumeMessages(ctx context.Context) {
 			b.dialogHandlers[update.FromChat().ID] = NewDialogHandler(
 				b.dialogTree,
 				make(chan tgbotapi.Update),
-				make(chan tgbotapi.Chattable),
+				make(chan interface{}),
 				make(chan struct{}, 1),
 			)
 
@@ -64,15 +64,13 @@ func (b *Bot) consumeMessages(ctx context.Context) {
 func (b *Bot) SendDialogMessages(ctx context.Context) {
 	dd := GetContextDialogDetails(ctx)
 
-	var deleteMessageConfig tgbotapi.DeleteMessageConfig
-	var messageConfig tgbotapi.MessageConfig
-
 	var deletePageMessageID int
+	var err error
 
-	for chattable := range b.dialogHandlers[dd.ChatID].msgOut {
-		switch chattable.(type) {
+	for msgOut := range b.dialogHandlers[dd.ChatID].msgOut {
+		switch msgOut.(type) {
 		case tgbotapi.MessageConfig:
-			messageConfig = chattable.(tgbotapi.MessageConfig)
+			messageConfig := msgOut.(tgbotapi.MessageConfig)
 			messageConfig.ChatID = dd.ChatID
 			sentMsg, err := b.bot.Send(messageConfig)
 			if err != nil {
@@ -94,13 +92,31 @@ func (b *Bot) SendDialogMessages(ctx context.Context) {
 			default:
 			}
 		case tgbotapi.DeleteMessageConfig:
-			deleteMessageConfig = chattable.(tgbotapi.DeleteMessageConfig)
+			deleteMessageConfig := msgOut.(tgbotapi.DeleteMessageConfig)
 			deleteMessageConfig.ChatID = dd.ChatID
-			_, err := b.bot.Send(deleteMessageConfig)
-			if err != nil {
-				log.Printf("failed to send message: %s\n", err.Error())
-				continue
-			}
+
+			_, err = b.bot.Send(deleteMessageConfig)
+
+		case tgbotapi.MediaGroupConfig:
+			mediaGroup := msgOut.(tgbotapi.MediaGroupConfig)
+			mediaGroup.ChatID = dd.ChatID
+
+			_, err = b.bot.SendMediaGroup(mediaGroup)
+
+		case tgbotapi.VideoConfig:
+			videoConfig := msgOut.(tgbotapi.VideoConfig)
+
+			_, err = b.bot.Send(videoConfig)
+
+		case tgbotapi.PhotoConfig:
+			photoConfig := msgOut.(tgbotapi.PhotoConfig)
+
+			_, err = b.bot.Send(photoConfig)
+		}
+
+		if err != nil {
+			log.Printf("failed to send message: %s\n", err.Error())
+			err = nil
 		}
 	}
 }

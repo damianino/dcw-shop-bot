@@ -24,22 +24,10 @@ func (m media) Create(media *models.Media) error {
 }
 
 func (m media) GetAllByMessageID(msgID int64) ([]models.Media, error) {
-	tx := m.db.Where(&models.Media{MessageID: msgID})
+	var res []models.Media
+	tx := m.db.Where(&models.Media{MessageID: msgID}).Find(&res)
 	if tx.Error != nil {
 		return nil, tx.Error
-	}
-
-	rows, err := tx.Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make([]models.Media, tx.RowsAffected)
-	for rows.Next() {
-		if err := rows.Scan(&res); err != nil {
-			return nil, err
-		}
 	}
 
 	return res, nil

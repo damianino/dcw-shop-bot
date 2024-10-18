@@ -81,7 +81,6 @@ func EnterLiveChat(ctx context.Context, dialog models.Dialog, controls tgbf.Dial
 		log.Println("failed to get dialog messages")
 	}
 
-	refreshIncomingTicker := time.NewTicker(time.Second * 5)
 	deliveredMessageIDs := make(map[int64]struct{})
 
 	for _, m := range messages {
@@ -102,6 +101,20 @@ func EnterLiveChat(ctx context.Context, dialog models.Dialog, controls tgbf.Dial
 		msg := tgbotapi.NewMessage(0, text)
 		msg.ParseMode = tgbotapi.ModeMarkdown
 		controls.MsgOut <- msg
+
+		media, err := deps.Repo.Media.GetAllByMessageID(m.ID)
+		if err != nil {
+			println(err)
+		}
+		if mediaOut := getMediaOut(dialog.TGChatID, media); mediaOut != nil {
+			controls.MsgOut <- mediaOut
+		}
+	}
+
+	refreshIncomingTicker := time.NewTicker(time.Second * 5)
+	var messageWithMediaGroup struct {
+		messageID    int64
+		mediaGroupID string
 	}
 
 	for {
@@ -131,6 +144,48 @@ func EnterLiveChat(ctx context.Context, dialog models.Dialog, controls tgbf.Dial
 				}
 			// message
 			case update.Message != nil && update.Message.From != nil:
+				if update.Message.MediaGroupID != "" {
+					if messageWithMediaGroup.mediaGroupID != update.Message.MediaGroupID {
+						msg := &models.Message{
+							DialogID:       dialog.ID,
+							SentByCustomer: false,
+							Text:           &(update.Message.Text),
+						}
+						if err := deps.Repo.Messages.Create(msg); err != nil {
+							log.Println(err)
+						}
+
+						deliveredMessageIDs[msg.ID] = struct{}{}
+						messageWithMediaGroup.mediaGroupID = update.Message.MediaGroupID
+						messageWithMediaGroup.messageID = msg.ID
+					}
+
+					var fileID string
+					var mediaType string
+					switch {
+					case len(update.Message.Photo) == 0:
+						fileID = update.Message.Photo[len(update.Message.Photo)-1].FileID
+						mediaType = models.MediaTypePhoto
+					case update.Message.Video != nil:
+						fileID = update.Message.Video.FileID
+						mediaType = models.MediaTypeVideo
+					case update.Message.Document != nil:
+						fileID = update.Message.Document.FileID
+						mediaType = models.MediaTypeDocument
+					default:
+
+					}
+
+					if err := deps.Repo.Media.Create(&models.Media{
+						MessageID: messageWithMediaGroup.messageID,
+						TGFileID:  fileID,
+						Type:      mediaType,
+					}); err != nil {
+						log.Println(err)
+					}
+					break
+				}
+
 				msg := &models.Message{
 					DialogID:       dialog.ID,
 					SentByCustomer: false,
@@ -153,10 +208,50 @@ func EnterLiveChat(ctx context.Context, dialog models.Dialog, controls tgbf.Dial
 
 			for _, m := range messages {
 				if _, ok := deliveredMessageIDs[m.ID]; !ok {
+					if m.Text != nil {
+						controls.MsgOut <- tgbotapi.NewMessage(0, *m.Text)
+					}
+					media, err := deps.Repo.Media.GetAllByMessageID(m.ID)
+					if err != nil {
+						println(err)
+					}
+					if mediaOut := getMediaOut(dialog.TGChatID, media); mediaOut != nil {
+						controls.MsgOut <- mediaOut
+					}
+
 					deliveredMessageIDs[m.ID] = struct{}{}
-					controls.MsgOut <- tgbotapi.NewMessage(0, *m.Text)
 				}
 			}
 		}
 	}
+}
+
+func getMediaOut(chatID int64, media []models.Media) interface{} {
+	switch {
+	case len(media) == 1:
+		switch {
+		case media[0].IsPhoto():
+			return tgbotapi.NewPhoto(chatID, tgbotapi.FileID(media[0].TGFileID))
+		case media[0].IsVideo():
+			return tgbotapi.NewVideo(chatID, tgbotapi.FileID(media[0].TGFileID))
+		case media[0].IsDocument():
+			return tgbotapi.NewDocument(chatID, tgbotapi.FileID(media[0].TGFileID))
+		}
+
+	case len(media) > 1:
+		var mediaGroup []interface{}
+		for _, m := range media {
+			switch {
+			case m.IsPhoto():
+				mediaGroup = append(mediaGroup, tgbotapi.NewInputMediaPhoto(tgbotapi.FileID(m.TGFileID)))
+			case m.IsVideo():
+				mediaGroup = append(mediaGroup, tgbotapi.NewInputMediaVideo(tgbotapi.FileID(m.TGFileID)))
+			case m.IsDocument():
+				mediaGroup = append(mediaGroup, tgbotapi.NewInputMediaDocument(tgbotapi.FileID(m.TGFileID)))
+			}
+		}
+		return tgbotapi.NewMediaGroup(chatID, mediaGroup)
+	}
+
+	return nil
 }
